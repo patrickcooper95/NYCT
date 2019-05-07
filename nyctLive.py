@@ -2,16 +2,21 @@ from google.transit import gtfs_realtime_pb2
 from datetime import datetime
 import time
 import urllib
-import easygui
+import pandas as pd
+import numpy as np
+
 
 # f = open('MTADataStream.txt', 'w')
 trains = []
+trains_df = pd.DataFrame(columns=['Service', 'Destination', 'Stop', 'Stop_Time'])
+
 
 feed = gtfs_realtime_pb2.FeedMessage()
 header = gtfs_realtime_pb2.FeedHeader()
 en = gtfs_realtime_pb2.FeedEntity()
 response = urllib.urlopen('http://datamine.mta.info/mta_esi.php?key=8cce8a18e7fc76932d5f8349472d04c9&feed_id=1')
 feed.ParseFromString(response.read())
+
 
 ts = time.time()
 print datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
@@ -29,25 +34,12 @@ class Train:
 
     def assign_train(self):
             stops_on_route = self.stops_on_route
-            name = self.name
 
             if stops_on_route:
-            #if name == str(6):
-                print name
                 if "N" in stops_on_route[0]:
-                    if name == "4":
-                        train_val = "Woodlawn"
-                    elif name == "5":
-                        train_val = "Eastchester-Dyre Ave"
-                    else:
-                        train_val = "Pelham Bay Park"
+                    train_val = "Uptown"
                 else:
-                    if name == "4":
-                        train_val = "New Lots Ave"
-                    elif name == "5":
-                        train_val = "Flatbush Ave"
-                    else:
-                        train_val = "Brooklyn Bridge"
+                    train_val = "Downtown"
 
                 return train_val
 
@@ -75,13 +67,60 @@ for entity in feed.entity:
     del stops_and_times
 
 count = 0
-for t in trains:
-    if t.name == str(6) or t.name == str(5) or t.name == str(4):
-        for key in t.stops_times.keys():
-            if key == "626N" or key == "626S":
-                print t.assign_train() + " " + datetime.fromtimestamp(float(t.stops_times[key])).\
-                                                                      strftime('%Y-%m-%d %H:%M:%S')
 
 
-easygui.msgbox(trains[0].stops_on_route[0], title="Train Update")
-# f.close()
+# lists for creating columns in DataFrame
+train_service = []
+train_destination = []
+train_stop = []
+train_stop_time = []
+train_dest_now = ""
+
+
+def create_train_lists(train_objects):
+    for t in train_objects:
+        df_count = 0
+        for tr in t.stops_on_route:
+            train_dest_now = t.assign_train()
+            train_service.append(t.name)
+            train_destination.append(train_dest_now)
+            train_stop.append(tr)
+
+            date_time = t.stop_times[df_count]
+            train_stop_time.append(date_time)
+            df_count += 1
+
+
+# Create numpy arrays of the lists created in the function above.
+create_train_lists(trains)
+train_service_np = np.array(train_service)
+train_destination_np = np.array(train_destination)
+train_stop_np = np.array(train_stop)
+train_stop_time_np = np.array(train_stop_time)
+
+
+trains_df = pd.DataFrame(columns=['Service', 'Destination', 'Stop', 'Stop_Time'])
+trains_df['Service'] = train_service_np
+trains_df['Destination'] = train_destination_np
+trains_df['Stop'] = train_stop_np
+trains_df['Stop_Time'] = train_stop_time_np
+trains_df['Stop_Time'] = pd.to_numeric(trains_df['Stop_Time'])
+# trains_df['ETA'] = np.nan
+# trains_df['ETA'] = pd.to_numeric(trains_df['ETA'])
+trains_df['ETA'] = trains_df['Stop_Time'] - time.time()
+trains_df['ETA'] = trains_df['ETA'] / 60
+
+
+date_adjust = time.time() + 300
+print datetime.fromtimestamp(date_adjust).strftime('%Y-%m-%d %H:%M:%S')
+for index, row in trains_df.iterrows():
+    if row['Stop'] != "626S":
+        trains_df = trains_df.drop(index=index)
+
+for index, row in trains_df.iterrows():
+    if row['ETA'] < 5:
+        trains_df = trains_df.drop(index=index)
+
+trains_df = trains_df.sort_values(by=['ETA'], ascending=True)
+
+print trains_df
