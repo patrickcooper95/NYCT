@@ -142,7 +142,7 @@ def create_trains():
             if row['ETA'] < 5:
                 df = df.drop(index=index)
 
-        filtered_df = df
+        filtered_df = df.sort_values(by='ETA', ascending=True)
         return filtered_df
 
     created_df = create_dataframe(train_service_np, train_destination_np, train_stop_np, train_stop_time_np)
