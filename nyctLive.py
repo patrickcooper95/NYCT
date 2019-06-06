@@ -151,7 +151,3 @@ def create_trains():
     # Once dataframe is created and filtered, return as "trains_df"
     created_trains_df = final_df
     return created_trains_df
-
-
-trains_df = create_trains()
-print trains_df.sort_values(by='ETA', ascending=True)
