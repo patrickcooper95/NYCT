@@ -151,3 +151,7 @@ def create_trains():
     # Once dataframe is created and filtered, return as "trains_df"
     created_trains_df = final_df
     return created_trains_df
+
+
+if __name__ == "__main__":
+    create_trains()
