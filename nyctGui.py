@@ -20,16 +20,6 @@ class TrainFrame:
         self.train_dir = self.window.create_text(275, 150, anchor='w', font=('Helvetica', 50, 'bold'))
         self.train_time = self.window.create_text(700, 150, anchor='w', font=('Helvetica', 50, 'bold'))
         self.min_type = self.window.create_text(800, 150, anchor='w', font=('Helvetica', 50, 'bold'), text="min")
-        # self.button1 = tk.Button(self.master, text="Quit", command=status_command)
-
-        # Define train data for each instance of the TrainFrame class.
-        # Train data will change with each instance of the class.
-        '''self.count_of_trains = 6
-        self.count_of_destination = "Brooklyn Bridge"
-        self.count_of_ETA = 2
-        self.window.itemconfigure(self.train_num, text=self.count_of_trains)
-        self.window.itemconfigure(self.train_dir, text=self.count_of_destination)
-        self.window.itemconfigure(self.train_time, text=self.count_of_ETA)'''
 
     def update_text(self):
         while self.queue.qsize():
