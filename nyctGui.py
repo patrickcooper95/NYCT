@@ -2,7 +2,6 @@ import nyctLive
 import Queue
 import threading
 import time
-import random
 import TrainFrame as tf
 import sys
 
@@ -33,13 +32,13 @@ class UpdateThread:
     def __init__(self, master):
         self.master = master
         self.queue = Queue.Queue()
-        self.gui = tf.TrainFrame(master, self.queue, self.end_application)
 
         # Create thread to handle I/O
         self.running = 1
+        self.cv = threading.Condition()
         self.io_thread = threading.Thread(target=self.data_thread)
         self.io_thread.start()
-
+        self.gui = tf.TrainFrame(master, self.queue, self.end_application, self.io_thread, self.cv)
         self.periodic_call()
 
     def periodic_call(self):
@@ -52,8 +51,11 @@ class UpdateThread:
         while self.running:
             # Import train data from nyctLive py file
             # Trim the results to 5 trains and delete the object containing the function return
-            trains = nyctLive.create_trains()
+            self.cv.acquire()
+            trains = nyctLive.train_main()
             new_trains = trains.iloc[:5]
+            self.cv.notify()
+            self.cv.release()
             del trains
 
             new_trains = new_trains.astype({'ETA': int})
@@ -68,7 +70,6 @@ class UpdateThread:
 
 
 if __name__ == "__main__":
-    rand = random.Random()
     root = tf.root
     client = UpdateThread(root)
     root.mainloop()
