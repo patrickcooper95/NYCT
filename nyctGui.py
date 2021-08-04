@@ -1,5 +1,5 @@
 import nyctLive
-import Queue
+import queue
 import threading
 import time
 import TrainFrame as tf
@@ -31,7 +31,7 @@ class UpdateThread:
     """
     def __init__(self, master):
         self.master = master
-        self.queue = Queue.Queue()
+        self.queue = queue.Queue()
 
         # Create thread to handle I/O
         self.running = 1
@@ -59,7 +59,7 @@ class UpdateThread:
             del trains
 
             new_trains = new_trains.astype({'ETA': int})
-            print new_trains
+            print(new_trains)
             for index, row in new_trains.iterrows():
                 self.queue.put(row)
                 time.sleep(3)

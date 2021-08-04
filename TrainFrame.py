@@ -1,5 +1,4 @@
-import Queue
-import Tkinter as tk
+import tkinter as tk
 
 WIDTH = 1000
 HEIGHT = 300

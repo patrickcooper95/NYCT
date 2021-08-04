@@ -1,19 +1,21 @@
 from google.transit import gtfs_realtime_pb2
 from datetime import datetime
 import time
-import urllib
+import urllib.request
 import pandas as pd
 import numpy as np
-
-
-trains = list()
-data_source = 'http://datamine.mta.info/mta_esi.php?key=8cce8a18e7fc76932d5f8349472d04c9&feed_id=1'
 
 feed = gtfs_realtime_pb2.FeedMessage()
 header = gtfs_realtime_pb2.FeedHeader()
 en = gtfs_realtime_pb2.FeedEntity()
-response = urllib.urlopen(data_source)
-feed.ParseFromString(response.read())
+
+
+trains = list()
+req = urllib.request.Request("https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-nqrw")
+req.add_header("x-api-key", "krePaW8hlE54YdGTniceLaMSchyURzyg91KrurOz")
+response = urllib.request.urlopen(req)
+response = response.read()
+feed.ParseFromString(response)
 
 # lists for creating columns in DataFrame
 train_service = list()
@@ -21,9 +23,8 @@ train_destination = list()
 train_stop = list()
 train_stop_time = list()
 
-
 ts = time.time()
-print datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+print(datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S'))
 
 
 class Train:
@@ -70,7 +71,7 @@ def _create_trains():
         new_train = Train(entity.trip_update.trip.route_id)
 
         # filter entities for only trip_updates and only 4, 5, and 6 trains
-        if entity.HasField('trip_update') and entity.trip_update.trip.route_id == 4 or 5 or 6:
+        if entity.HasField('trip_update') and entity.trip_update.trip.route_id == "Q":
             for i in range(len(entity.trip_update.stop_time_update)):
                 stops_and_times.update({str(entity.trip_update.stop_time_update[i].stop_id):
                                        str(entity.trip_update.stop_time_update[i].arrival.time)})
@@ -121,8 +122,8 @@ def _create_dataframe(np1, np2, np3, np4):
 
     # With DF created, now filter for the desired trains to display in the GUI.
     date_adjust = time.time() + 300
-    print "Filtering...\n"
-    print datetime.fromtimestamp(date_adjust).strftime('%Y-%m-%d %H:%M:%S')
+    print("Filtering...\n")
+    print(datetime.fromtimestamp(date_adjust).strftime('%Y-%m-%d %H:%M:%S'))
 
     downtown_stops = new_df['Stop'] == '626S'
     uptown_stops = new_df['Stop'] == '626N'
@@ -150,6 +151,6 @@ def train_main():
     del train_stop_time_np
     return created_df
 
-
-if __name__ == "__main__":
-    train_main()
+#
+# if __name__ == "__main__":
+#     train_main()
