@@ -1,6 +1,6 @@
-import Tkinter as tk
+import tkinter as tk
 import nyctLive
-import Queue
+import queue
 import threading
 import time
 import random
@@ -12,6 +12,7 @@ class TrainFrame:
         self.queue = queue
         console = tk.Button(master, text='Close', command=status_command)
         console.pack()
+        master.title('Subway Countdown Clock')
 
         self.window = tk.Canvas(master, width=1000, height=300)
         self.window.pack()
@@ -19,7 +20,7 @@ class TrainFrame:
         self.train_num = self.window.create_text(150, 150, fill='white', font=('Helvetica', 100, 'bold'))
         self.train_dir = self.window.create_text(275, 150, anchor='w', font=('Helvetica', 50, 'bold'))
         self.train_time = self.window.create_text(700, 150, anchor='w', font=('Helvetica', 50, 'bold'))
-        self.min_type = self.window.create_text(800, 150, anchor='w', font=('Helvetica', 50, 'bold'), text="min")
+        self.min_type = self.window.create_text(790, 150, anchor='w', font=('Helvetica', 50, 'bold'), text="min")
 
     def update_text(self):
         while self.queue.qsize():
@@ -28,7 +29,7 @@ class TrainFrame:
                 self.window.itemconfigure(self.train_num, text=current_train.loc['Service'])
                 self.window.itemconfigure(self.train_dir, text=current_train.loc['Destination'])
                 self.window.itemconfigure(self.train_time, text=current_train.loc['ETA'])
-            except Queue.Empty:
+            except queue.Empty:
                 pass
 
 
@@ -36,7 +37,7 @@ class UpdateThread:
 
     def __init__(self, master):
         self.master = master
-        self.queue = Queue.Queue()
+        self.queue = queue.Queue()
         self.gui = TrainFrame(master, self.queue, self.end_application)
 
         # Create thread to handle I/O
@@ -51,7 +52,7 @@ class UpdateThread:
         if not self.running:
             import sys
             sys.exit(1)
-        self.master.after(2000, self.periodic_call)
+        self.master.after(1000, self.periodic_call)
 
     def worker_thread1(self):
         while self.running:
@@ -62,7 +63,7 @@ class UpdateThread:
             del trains
 
             new_trains = new_trains.astype({'ETA': int})
-            print new_trains
+            # print new_trains
             for index, row in new_trains.iterrows():
                 self.queue.put(row)
                 time.sleep(3)
