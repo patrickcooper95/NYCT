@@ -1,30 +1,19 @@
-from google.transit import gtfs_realtime_pb2
 from datetime import datetime
+import json
 import time
+
 import urllib.request
+from google.transit import gtfs_realtime_pb2
 import pandas as pd
 import numpy as np
 
-feed = gtfs_realtime_pb2.FeedMessage()
-header = gtfs_realtime_pb2.FeedHeader()
-en = gtfs_realtime_pb2.FeedEntity()
 
-
-trains = list()
-req = urllib.request.Request("https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-nqrw")
-req.add_header("x-api-key", "krePaW8hlE54YdGTniceLaMSchyURzyg91KrurOz")
-response = urllib.request.urlopen(req)
-response = response.read()
-feed.ParseFromString(response)
-
-# lists for creating columns in DataFrame
-train_service = list()
-train_destination = list()
-train_stop = list()
-train_stop_time = list()
-
+# Get start time for recording when data was retrieved
 ts = time.time()
-print(datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S'))
+start_time = datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+
+pd.set_option('display.max_columns', None)
+pd.set_option('display.max_rows', None)
 
 
 class Train:
@@ -37,120 +26,141 @@ class Train:
         it mainly acts as a container for the train stops and times.
     """
 
-    def __init__(self, name):
-        self.name = name
-        self.stops_on_route = list()
-        self.stop_times = list()
-        self.stops_times = list()
+    train_status_mapping = {
+        0: "INCOMING_AT",
+        1: "STOPPED_AT",
+        2: "IN_TRANSIT_TO"
+    }
 
-    def assign_train(self):
-        stops_on_route = self.stops_on_route
+    def __init__(self, feed_entity):
+        ######## EXAMPLE DATA ########
+        # trip_id: "136150_6..S01R"
+        # start_date: "20221103"
+        # route_id: "6"
+        # current_stop_sequence: 37
+        # current_status: STOPPED_AT
+        # timestamp: 1667533101
+        # stop_id: "639S"
+        self._mask_schema(feed_entity)
+        self.id = feed_entity.vehicle.trip.trip_id
+        self.service = feed_entity.vehicle.trip.route_id
+        self.start_date = feed_entity.vehicle.trip.start_date
+        self.timestamp = feed_entity.vehicle.timestamp
+        self.stop_id = feed_entity.vehicle.stop_id
+        self.direction = self.orient_train()
 
-        if stops_on_route:
-            if "N" in stops_on_route[0]:
-                train_val = "Uptown"
+    def orient_train(self):
+
+        if self.stop_id:
+            if "N" in self.stop_id:
+                train_dir = "Uptown"
             else:
-                train_val = "Downtown"
+                train_dir = "Downtown"
 
-            return train_val
+            return train_dir
+
+    def _mask_schema(self, entity):
+        """Add values when they are not provided in the entity."""
+
+        self.current_stop_sequence = entity.vehicle.current_stop_sequence \
+            if hasattr(entity.vehicle, "current_stop_sequence") else None
+        # statuses are stored in the Vehicle object as 0, 1 and 2 - mapped as part of Train class
+        self.current_status = Train.train_status_mapping[entity.vehicle.current_status]
 
 
-def _create_trains():
+def _create_trains(service: str):
     """
         The crucial function for the NYCT Project - this function parses the data from the transit feed,
         calls "create_train_lists" to create lists of this data; calls "create_dataframe" to align this data
         in a Pandas dataframe; and finally calls sort_dataframe to sort and add calculated fields to the DF.
-    :return: a Pandas dataframe containing the trip_updates for the 4, 5, and 6 trains
+    :return: a list of Train objects
     """
+    trains = []
     for entity in feed.entity:
-        # create dict and two lists for each train
-        stops_and_times = dict()
-        stations = list()
-        arrival_times = list()
-        # create object
-        new_train = Train(entity.trip_update.trip.route_id)
-
-        # filter entities for only trip_updates and only 4, 5, and 6 trains
-        if entity.HasField('trip_update') and entity.trip_update.trip.route_id == "Q":
-            for i in range(len(entity.trip_update.stop_time_update)):
-                stops_and_times.update({str(entity.trip_update.stop_time_update[i].stop_id):
-                                       str(entity.trip_update.stop_time_update[i].arrival.time)})
-                stations.append(str(entity.trip_update.stop_time_update[i].stop_id))
-                arrival_times.append(str(entity.trip_update.stop_time_update[i].arrival.time))
-            new_train.stops_on_route = stations
-            new_train.stop_times = arrival_times
-            new_train.stops_times = stops_and_times
-        trains.append(new_train)
-        del new_train
-        del stations
-        del arrival_times
-        del stops_and_times
+        if entity.HasField("vehicle") and entity.vehicle.trip.route_id == service:
+            new_train = Train(entity)
+            trains.append(new_train)
+    return trains
 
 
-def _create_train_lists(train_objects):
-
-    for t in train_objects:
-        df_count = 0
-        for tr in t.stops_on_route:
-            train_dest_now = t.assign_train()
-            train_service.append(t.name)
-            train_destination.append(train_dest_now)
-            train_stop.append(tr)
-
-            date_time = t.stop_times[df_count]
-            train_stop_time.append(date_time)
-            df_count += 1
+def filter_stations(route_id, borough):
+    """Filter the Stations manifest for only relevant stations."""
+    stations_df = pd.read_csv("stations.csv")
+    stations_df = stations_df[
+        (stations_df["Borough"] == borough) &
+        (stations_df["Daytime Routes"].str.contains(route_id))
+    ]
+    return stations_df
 
 
-def _create_dataframe(np1, np2, np3, np4):
+def train_main(filtered_stations: pd.DataFrame, create_json=False):
 
-    new_df = pd.DataFrame(columns=['Service', 'Destination', 'Stop', 'Stop_Time'])
-    service_np = np1
-    destination_np = np2
-    stop_np = np3
-    stop_time_np = np4
+    service = "6"
+    list_of_trains = _create_trains(service)
 
-    new_df['Service'] = service_np
-    new_df['Destination'] = destination_np
-    new_df['Stop'] = stop_np
-    new_df['Stop_Time'] = stop_time_np
-    new_df['Stop_Time'] = pd.to_numeric(new_df['Stop_Time'])
-    new_df['ETA'] = new_df['Stop_Time'] - time.time()
-    new_df['ETA'] = new_df['ETA'] / 60
-    new_df['Train_ID'] = new_df['Service'].astype(str) + new_df['Stop'].astype(str) + new_df['ETA'].astype(str)
-    new_df = new_df.drop_duplicates(subset='Train_ID')
+    if create_json:
+        return build_json(list_of_trains, filtered_stations)
 
-    # With DF created, now filter for the desired trains to display in the GUI.
-    date_adjust = time.time() + 300
-    print("Filtering...\n")
-    print(datetime.fromtimestamp(date_adjust).strftime('%Y-%m-%d %H:%M:%S'))
-
-    downtown_stops = new_df['Stop'] == '626S'
-    uptown_stops = new_df['Stop'] == '626N'
-    train_is_gone = new_df['ETA'] > 4
-    filtered_stops_df = new_df.loc[downtown_stops | uptown_stops, :]
-    filtered_df = filtered_stops_df.loc[train_is_gone, :]
-    filtered_df = filtered_df.sort_values(by='ETA', ascending=True)
-    return filtered_df
+    # for debug
+    for train in list_of_trains:
+        if train.stop_id[:-1] in filtered_stations["GTFS Stop ID"].values:
+            print(f"Trip ID: {train.id}\n"
+                  f"Route ID: {train.service}\n"
+                  f"Direction: {train.direction}\n"
+                  f"Stop ID: {train.stop_id}\n"
+                  f"Station: {filtered_stations.loc[stations_in_scope['GTFS Stop ID'] == train.stop_id[:-1], 'Stop Name'].values[0]}\n"
+                  f"Status: {train.current_status}\n"
+                  f"Stop Sequence: {train.current_stop_sequence}\n")
 
 
-def train_main():
+def build_json(train_list: list, scoped_stations: pd.DataFrame):
+    """Turn the list of train objects into a JSON array."""
 
-    _create_trains()
-    _create_train_lists(trains)
+    output_list = []
+    trains_in_scope = 0
+    for train in train_list:
+        if train.stop_id[:-1] in scoped_stations["GTFS Stop ID"].values:
+            trains_in_scope += 1
+            output_list.append(
+                {
+                    "trip_id": train.id,
+                    "route_id": train.service,
+                    "direction": train.direction,
+                    "stop_id": train.stop_id,
+                    "station": scoped_stations.loc[
+                        stations_in_scope['GTFS Stop ID'] == train.stop_id[:-1], 'Stop Name'
+                    ].values[0],
+                    "status": train.current_status,
+                    "stop_sequence": train.current_stop_sequence
+                }
+            )
+    return {
+        "timestamp": start_time,
+        "subway_api_version": "0.0.1a",
+        "total_train_count": len(train_list),
+        "scoped_train_count": trains_in_scope,
+        "station_count": len(scoped_stations["GTFS Stop ID"].values),
+        "data": output_list
+    }
 
-    # Create numpy arrays of the lists created in the _create_train_lists function.
-    train_service_np = np.array(train_service)
-    train_destination_np = np.array(train_destination)
-    train_stop_np = np.array(train_stop)
-    train_stop_time_np = np.array(train_stop_time)
-    created_df = _create_dataframe(train_service_np, train_destination_np, train_stop_np, train_stop_time_np)
-    del train_service_np
-    del train_destination_np
-    del train_stop_np
-    del train_stop_time_np
-    return created_df
 
-#
-# if __name__ == "__main__":
-#     train_main()
+if __name__ == "__main__":
+    use_feed = True
+    if use_feed:
+        feed = gtfs_realtime_pb2.FeedMessage()
+        header = gtfs_realtime_pb2.FeedHeader()
+        en = gtfs_realtime_pb2.FeedEntity()
+        # TODO: make this URL a config
+        req = urllib.request.Request("https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs")
+
+        with open("api_key", "r") as key_file:
+            api_key = key_file.read()
+        req.add_header("x-api-key", api_key)
+        response = urllib.request.urlopen(req)
+        response = response.read()
+        feed.ParseFromString(response)
+
+    stations_in_scope = filter_stations("6", "M")
+    result = train_main(stations_in_scope, create_json=True)
+    with open("test_output.json", "w") as json_file:
+        json.dump(result, json_file)

@@ -1,0 +1,33 @@
+base_gtfs_url: https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds
+lexington_avenue_feed: nyct%2Fgtfs
+seventh_avenue_feed: nyct%2Fgtfs
+flushing_feed: nyct%2Fgtfs
+broadway_feed: nyct%2Fgtfs-nqrw
+
+train_status_mappings:
+  0: INCOMING_AT
+  1: STOPPED_AT
+  2: IN_TRANSIT_TO
+
+led_station_mapping:
+  6:
+    621: 0
+    622: 2
+    623: 4
+    624: 6
+    625: 9
+    626: 12
+    627: 15
+    628: 18
+    629: 21
+    630: 24
+    631: 27
+    632: 30
+    633: 33
+    634: 36
+    635: 39
+    636: 42
+    637: 45
+    638: 48
+    639: 51
+    640: 54
